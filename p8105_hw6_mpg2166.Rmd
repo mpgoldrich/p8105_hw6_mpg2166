@@ -242,7 +242,50 @@ birthweight_df |>
   labs(title = "Model residuals vs. fitted values")
 ```
 
+Now, I will compare my model (`bwt = blength + gaweeks + babysex + delwt + momage`) to `bwt = blength + gaweeks` and to `bwt = bhead + blength + babysex + bhead * blength + bhead * babysex + blength * babysex + bhead * length * babysex`. This code chunk fits the candidate models to training data and obtains RMSEs using the testing data.
 
+```{r q3_modelcomparisons}
+cv_df =
+  crossv_mc(birthweight_df, 100) |> 
+  mutate(
+    train = map(train, as_tibble),
+    test = map(test, as_tibble)
+  ) |> 
+  mutate(
+    proposed_mod = 
+      map(train, 
+          \(df) lm(bwt ~ blength + gaweeks + babysex + delwt + momage, data = df)),
+    main_mod = map(train, \(df) lm(bwt ~ blength + gaweeks, data = df)),
+    interact_mod = 
+      map(train,
+          \(df) lm(bwt ~ bhead * blength + bhead * babysex + blength * babysex + 
+                     bhead * blength * babysex, data = df))
+  ) |> 
+  mutate(
+    rmse_proposed = 
+      map2_dbl(proposed_mod, test, \(mod, df) rmse(model = mod, data = df)),
+    rmse_main = map2_dbl(main_mod, test, \(mod, df) rmse(model = mod, data = df)),
+    rmse_interact = 
+      map2_dbl(interact_mod, test, \(mod, df) rmse(model = mod, data = df))
+  )
+```
+
+The below code chunk produces a violin plot to compare prediction error distributions across the models. The model containing interaction terms (`bwt = bhead + blength + babysex + bhead * blength + bhead * babysex + blength * babysex + bhead * length * babysex`) is the clear winner with consistently lower error.
+
+```{r q3_modelcomparisonplot}
+cv_df |> 
+  select(starts_with("rmse")) |> 
+  pivot_longer(
+    everything(),
+    names_to = "model",
+    values_to = "rmse",
+    names_prefix = "rmse_"
+  ) |> 
+  mutate(model = fct_inorder(model)) |> 
+  ggplot(aes(x = model, y = rmse)) + 
+  geom_violin() +
+  labs(title = "Cross-validated prediction error distribution by model")
+```
 
 
 
